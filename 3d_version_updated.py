@@ -4,28 +4,63 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from scipy.spatial.distance import pdist, squareform
 
+"""
+All particles are considered to have the same constant parameters i.e. mass, radius.
+Initial speeds are determined by temperature, from which the speeds are calculated by thermal velocity equation.
+
+"""
+
 class gas_simulation_3d:
 
     def __init__(self, particles_count = 2197, mass = 5e-20, effective_radius = 2e-10, volume = 1e-23, T = 300):
-        self.partcount = particles_count
-        self.mass = mass
-        self.radius = effective_radius
-        self.volume = volume
-        self.side_length = (volume ** (1/3))
-        self.temp = T
-        self.vel_normalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1/2)
-        self.pressure = 0
-        self.dp = 0
-        self.counter = 0
-        self.left_hand_side = 0
-        self.mass_non_normed = 5
-        self.b = self.partcount * ((4/3) * np.pi * (self.radius ** 3))
-        self.set_particles()
-        self.set_graphs()
+        """
+        Initializing starting parameters
+        """
+        self.partcount = particles_count # the amount of particles in simulation
+        self.mass = mass # the mass of any particle
+        self.radius = effective_radius # radius of the molecule i.e. distance at which particles will start colliding
+        self.volume = volume # volume of the observed chamber
+        self.temp = T # average temperature of the gas
+
+        """
+        Variables {left_hand_side, mass_non_normed, pressure} were used previously to calculate ideal gas equation,
+        they are to be deleted/replaced with proper parameters in future updates due to the fact that the gas is not 
+        really ideal.
+        """
+        # self.pressure = 0
+        # self.dp = 0
+        # self.counter = 0
+        # self.left_hand_side = 0
+        # self.mass_non_normed = 5
+
+        """
+        Calculating needed parameters from initial conditions.
+        """
+        self.b = self.partcount * ((4/3) * np.pi * (self.radius ** 3)) # idk what this is i forgot
+        self.side_length = (volume ** (1 / 3)) # length of the side of observed chamber
+        self.vel_normalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1 / 2) # root mean square of speed of molecules
+        self.set_particles() # initializing particle initializing method
+        self.set_graphs() # initializing graph initializing method
 
     def set_particles(self):
-        # set positions and velocities with array of type [[x1, y1, z1], [x2, y2, z2], ..., [xn, yn, zn]]
+        """
+        We will spawn particles in a grid (we split the chamber, which is cube, into np.floor((n) ** 1/3) smaller cubes,
+        where n is the amount of particles. Then we assign every molecule to it's own smaller cube.
+        This is done so that the molecules don't spawn inside of each other or don't spawn very close in order to slow
+        down the process of converging to Maxwell distribution.
+        """
+
+        # calculating edges of the grid
         dists = np.linspace(self.radius * 5, self.side_length - self.radius * 5, round(self.partcount ** (1 / 3)))
+
+        """
+        Assigning particles to cells.
+        If the amount of particles is not a perfect cube, we round it down to a nearest cube, and then assign remaining 
+        particles in already occupied cells with a slight offset.
+        
+        
+        !!!THIS PART IS TO BE IMPROVED SO THAT THERE ARE NO TRIPLE CYCLES!!!
+        """
         self.pos = np.zeros((self.partcount, 3))
         for i in range(round(self.partcount ** (1 / 3))):
             for j in range(round(self.partcount ** (1 / 3))):
@@ -81,10 +116,12 @@ class gas_simulation_3d:
             if self.pos[i, [0]] - self.radius < 0:
                 self.vel[i, [0]] = -self.vel[i, [0]]
                 self.pos[i, [0]] = self.radius * 1.01
-
-                # finding change of momentum
-                self.dp += 2 * abs(self.vel[i, [0]]) * self.mass_non_normed
-                self.counter += 1
+                """
+                This is 
+                """
+                # # finding change of momentum
+                # self.dp += 2 * abs(self.vel[i, [0]]) * self.mass_non_normed
+                # self.counter += 1
             if self.pos[i, [0]] + self.radius > self.side_length:
                 self.vel[i, [0]] = -self.vel[i, [0]]
                 self.pos[i, [0]] = self.side_length - (self.radius * 1.01)
@@ -134,7 +171,7 @@ def animate(a):
     _, _, bars = ax2.hist(data, bins = 100, lw=1, density=True, alpha=0.75)
     ax2.plot(x, p)
     molecules.set_color(random.choice(['b', 'g', 'r', 'c', 'm', 'y']))
-    plt.savefig(str(a) + ".png")
+    # plt.savefig(str(a) + ".png")
     return bars.patches + [molecules]
 
 def my_dist(v, mass, temp):
