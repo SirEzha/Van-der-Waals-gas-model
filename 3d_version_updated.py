@@ -12,13 +12,13 @@ Initial speeds are determined by temperature, from which the speeds are calculat
 
 class gas_simulation_3d:
 
-    def __init__(self, particles_count = 2197, mass = 5e-20, effective_radius = 2e-10, volume = 1e-23, T = 300):
+    def __init__(self, particlesCount = 5000, mass = 5e-20, effectiveRadius = 2e-10, volume = 1e-23, T = 300):
         """
         Initializing starting parameters
         """
-        self.partcount = particles_count # the amount of particles in simulation
+        self.partCount = particlesCount # the amount of particles in simulation
         self.mass = mass # the mass of any particle
-        self.radius = effective_radius # radius of the molecule i.e. distance at which particles will start colliding
+        self.radius = effectiveRadius # radius of the molecule i.e. distance at which particles will start colliding
         self.volume = volume # volume of the observed chamber
         self.temp = T # average temperature of the gas
 
@@ -36,47 +36,66 @@ class gas_simulation_3d:
         """
         Calculating needed parameters from initial conditions.
         """
-        self.b = self.partcount * ((4/3) * np.pi * (self.radius ** 3)) # idk what this is i forgot
-        self.side_length = (volume ** (1 / 3)) # length of the side of observed chamber
-        self.vel_normalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1 / 2) # root mean square of speed of molecules
-        self.set_particles() # initializing particle initializing method
-        self.set_graphs() # initializing graph initializing method
+        self.b = self.partCount * ((4 / 3) * np.pi * (self.radius ** 3)) # idk what this is i forgot
+        self.sideLength = (volume ** (1 / 3)) # length of the side of observed chamber
+        self.velNormalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1 / 2) # root mean square of speed of molecules
+        self.SetParticles() # initializing particle initializing method
+        self.SetGraphs() # initializing graph initializing method
 
-    def set_particles(self):
+    def SetParticles(self):
         """
-        We will spawn particles in a grid (we split the chamber, which is cube, into np.floor((n) ** 1/3) smaller cubes,
-        where n is the amount of particles. Then we assign every molecule to it's own smaller cube.
+        This module places particles inside the chamber and assigns velocities to them. Particles are placed evenly.
         This is done so that the molecules don't spawn inside of each other or don't spawn very close in order to slow
         down the process of converging to Maxwell distribution.
         """
 
-        # calculating edges of the grid
-        dists = np.linspace(self.radius * 5, self.side_length - self.radius * 5, round(self.partcount ** (1 / 3)))
+        """
+        Calculating positions of the edges of the grid inside the chamber with extra space near walls taken into account
+        """
+        dists = np.linspace(self.radius * 5, self.sideLength - self.radius * 5, int(np.floor(self.partCount ** (1 / 3))))
 
         """
         Assigning particles to cells.
-        If the amount of particles is not a perfect cube, we round it down to a nearest cube, and then assign remaining 
-        particles in already occupied cells with a slight offset.
+        If the amount of particles n is not a perfect cube, we round it down to a nearest cube m ** 3, create a grid
+        inside of a chamber with side length of m. Then we assign particles into this grid one by one. Coordinates
+        matrix has a format of [[x_1, y_1, z_1]
+                                [x_2, y_2, z_2]
+                                    ......
+                                [x_n, y_n, z_n]]
         
-        
-        !!!THIS PART IS TO BE IMPROVED SO THAT THERE ARE NO TRIPLE CYCLES!!!
+        EXAMPLE:
+        Consider we have 40 particles. We then round it down to nearest cube, which is 27. Thus we create a meshgrid
+        with side length 3. Now we start the process of assignment. Particle #1 is placed into cell {0, 0, 0}. 
+        Particle #2 is placed into cell {1, 0, 0}; #3 - {2, 0, 0}; #4 - {0, 1, 0}; #5 - {1, 1, 0}; #6 - {2, 1, 0};
+        #7 - {0, 2, 0}; ... ; #10 - {0, 0, 1}; ... ; #27 - {2, 2, 2}; #28 - {0, 0, 0}, #29 - {1, 0, 0}, etc.
+        Notation of coordinates is {x, y, z}.
         """
-        self.pos = np.zeros((self.partcount, 3))
-        for i in range(round(self.partcount ** (1 / 3))):
-            for j in range(round(self.partcount ** (1 / 3))):
-                for k in range(round(self.partcount ** (1 / 3))):
-                    self.pos[i * round(self.partcount ** (2 / 3)) + j * round(self.partcount ** (1 / 3)) + k, :] = np.array(
-                        [dists[i] + random.rand(1)[0] * (self.radius * 0.2),
-                         dists[j] + random.rand(1)[0] * (self.radius * 0.2), dists[k] + random.rand(1)[0] * (self.radius * 0.2)])
-        self.vel = random.uniform(-1, 1, (self.partcount, 3)) * self.vel_normalized
-        self.vel_hist_data = np.zeros(self.partcount)
-        for i in range(self.partcount):
-            self.vel_hist_data[i] = (self.vel[i, 0] ** 2 + self.vel[i, 1] ** 2 + self.vel[i, 2] ** 2) ** (1 / 2)
 
-    def set_graphs(self):
+        #'self.cubic_parts' introduced for optimizing calculation time
+        self.cubicParts1 = int(np.floor(self.partCount ** (1 / 3)))
+        self.cubicParts2 = (self.cubicParts1 ** 2)
+
+        #assigning coordinates
+        self.pos = np.zeros((self.partCount, 3))
+        for i in range(self.partCount):
+            temp = i % (self.cubicParts1 ** 3)
+            self.pos[i, :] = np.array([dists[int(temp % self.cubicParts1)] + random.rand(1)[0] * (self.radius * 0.5),
+                                       dists[int((temp % self.cubicParts2) // self.cubicParts1)] + random.rand(1)[0] * (self.radius * 0.5),
+                                       dists[int(temp // self.cubicParts2)] + random.rand(1)[0] * (self.radius * 0.5)])
+
+        """
+        Creating random speed matrix where values are placed in as:
+        [[V_x_1, V_y_1, V_z_1] - speeds of the first particle projected on x, y, z axes  
+         [V_x_2, V_y_2, V_z_2] - speeds of the second particle projected on x, y, z axes
+                  ...
+         [V_x_n, V_y_n, V_z_n]] - speeds of the n-th particle projected on x, y, z axes
+        """
+        self.vel = random.uniform(-1, 1, (self.partCount, 3)) * self.velNormalized
+
+    def SetGraphs(self):
         self.figure = plt.figure(figsize=(11, 8))
         self.ax1 = plt.subplot2grid((3, 3), (0, 0), rowspan=2, colspan=2, projection='3d')
-        box_limits = np.array([0, self.side_length])
+        box_limits = np.array([0, self.sideLength])
         self.ax1.set_xlim3d(box_limits)
         self.ax1.set_ylim3d(box_limits)
         self.ax1.set_zlim3d(box_limits)
@@ -86,7 +105,10 @@ class gas_simulation_3d:
         self.ax2 = plt.subplot2grid((3, 3), (0, 2))
         self.ax2.set_xlabel('Speed')
         self.ax2.set_ylabel('Frequency')
-
+        # setting up initial histogram state
+        self.vel_hist_data = np.zeros(self.partCount)
+        for i in range(self.partCount):
+            self.vel_hist_data[i] = (self.vel[i, 0] ** 2 + self.vel[i, 1] ** 2 + self.vel[i, 2] ** 2) ** (1 / 2)
 
     def step(self, dt):
 
@@ -112,7 +134,7 @@ class gas_simulation_3d:
             self.pos[i2] += self.vel[i2] * dt
 
         # finding particles colliding with the wall and the change of momentum
-        for i in range(self.partcount):
+        for i in range(self.partCount):
             if self.pos[i, [0]] - self.radius < 0:
                 self.vel[i, [0]] = -self.vel[i, [0]]
                 self.pos[i, [0]] = self.radius * 1.01
@@ -122,21 +144,21 @@ class gas_simulation_3d:
                 # # finding change of momentum
                 # self.dp += 2 * abs(self.vel[i, [0]]) * self.mass_non_normed
                 # self.counter += 1
-            if self.pos[i, [0]] + self.radius > self.side_length:
+            if self.pos[i, [0]] + self.radius > self.sideLength:
                 self.vel[i, [0]] = -self.vel[i, [0]]
-                self.pos[i, [0]] = self.side_length - (self.radius * 1.01)
+                self.pos[i, [0]] = self.sideLength - (self.radius * 1.01)
             if self.pos[i, [1]] - self.radius < 0:
                 self.vel[i, [1]] = -self.vel[i, [1]]
                 self.pos[i, [1]] = self.radius * 1.01
-            if self.pos[i, [1]] + self.radius > self.side_length:
+            if self.pos[i, [1]] + self.radius > self.sideLength:
                 self.vel[i, [1]] = -self.vel[i, [1]]
-                self.pos[i, [1]] = self.side_length - (self.radius * 1.01)
+                self.pos[i, [1]] = self.sideLength - (self.radius * 1.01)
             if self.pos[i, [2]] - self.radius < 0:
                 self.vel[i, [2]] = -self.vel[i, [2]]
                 self.pos[i, [2]] = self.radius * 1.01
-            if self.pos[i, [2]] + self.radius > self.side_length:
+            if self.pos[i, [2]] + self.radius > self.sideLength:
                 self.vel[i, [2]] = -self.vel[i, [2]]
-                self.pos[i, [2]] = self.side_length - (self.radius * 1.01)
+                self.pos[i, [2]] = self.sideLength - (self.radius * 1.01)
 
         # finding the pressure
         # self.pressure = self.dp / (self.counter * dt * (self.side_length ** 2))
@@ -166,11 +188,10 @@ def animate(a):
     abobus_3d.step(dt)
     molecules.set_data_3d(abobus_3d.pos[:, 0], abobus_3d.pos[:, 1], abobus_3d.pos[:, 2])
     molecules.set_markersize(1)
-    for i in range(abobus_3d.partcount):
+    for i in range(abobus_3d.partCount):
         data[i] = (abobus_3d.vel[i, 0] ** 2 + abobus_3d.vel[i, 1] ** 2 + abobus_3d.vel[i, 2] ** 2) ** (1 / 2)
     _, _, bars = ax2.hist(data, bins = 100, lw=1, density=True, alpha=0.75)
     ax2.plot(x, p)
-    molecules.set_color(random.choice(['b', 'g', 'r', 'c', 'm', 'y']))
     # plt.savefig(str(a) + ".png")
     return bars.patches + [molecules]
 
