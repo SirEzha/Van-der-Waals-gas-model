@@ -10,37 +10,34 @@ Initial speeds are determined by temperature, from which the speeds are calculat
 
 """
 
-class gas_simulation_3d:
+class GasSimulation3d:
 
-    def __init__(self, particlesCount = 5000, mass = 5e-20, effectiveRadius = 2e-10, volume = 1e-23, T = 300):
+    def __init__(self, particlesCount=45, mass=5e-20, effectiveRadius=2e-10, volume=1e-23, T=300):
         """
         Initializing starting parameters
         """
-        self.partCount = particlesCount # the amount of particles in simulation
-        self.mass = mass # the mass of any particle
-        self.radius = effectiveRadius # radius of the molecule i.e. distance at which particles will start colliding
-        self.volume = volume # volume of the observed chamber
-        self.temp = T # average temperature of the gas
+        self.partCount = particlesCount  # the amount of particles in simulation
+        self.mass = mass  # the mass of any particle
+        self.radius = effectiveRadius  # radius of the molecule i.e. distance at which particles will start colliding
+        self.volume = volume  # volume of the observed chamber
+        self.temp = T  # average temperature of the gas
+        self.pos = np.zeros((self.partCount, 3))  # array which will contain particles coordinates
+        self.vel = np.zeros((self.partCount, 3))  # array which will contain particles velocities
+        self.particleCell = {}
+        self.cubicParts1 = int(np.floor(self.partCount ** (1 / 3)))  # created for optimizing future calculations
+        self.cubicParts2 = (self.cubicParts1 ** 2)  # created for optimizing future calculations
 
-        """
-        Variables {left_hand_side, mass_non_normed, pressure} were used previously to calculate ideal gas equation,
-        they are to be deleted/replaced with proper parameters in future updates due to the fact that the gas is not 
-        really ideal.
-        """
-        # self.pressure = 0
-        # self.dp = 0
-        # self.counter = 0
-        # self.left_hand_side = 0
-        # self.mass_non_normed = 5
+        self.partBelonging = np.zeros(7, self.cubicParts1 ** 3) # this array is explained in Step
+        self.partBelonging[0, 0] = 
 
         """
         Calculating needed parameters from initial conditions.
         """
-        self.b = self.partCount * ((4 / 3) * np.pi * (self.radius ** 3)) # idk what this is i forgot
-        self.sideLength = (volume ** (1 / 3)) # length of the side of observed chamber
-        self.velNormalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1 / 2) # root mean square of speed of molecules
-        self.SetParticles() # initializing particle initializing method
-        self.SetGraphs() # initializing graph initializing method
+        self.b = self.partCount * ((4 / 3) * np.pi * (self.radius ** 3))  # idk what this is i forgot
+        self.sideLength = (volume ** (1 / 3))  # length of the side of observed chamber
+        self.velNormalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1 / 2)  # root mean square of speed of molecules
+        self.SetParticles()  # initializing particle initializing method
+        self.SetGraphs()  # initializing graph initializing method
 
     def SetParticles(self):
         """
@@ -71,10 +68,6 @@ class gas_simulation_3d:
         Notation of coordinates is {x, y, z}.
         """
 
-        #'self.cubic_parts' introduced for optimizing calculation time
-        self.cubicParts1 = int(np.floor(self.partCount ** (1 / 3)))
-        self.cubicParts2 = (self.cubicParts1 ** 2)
-
         #assigning coordinates
         self.pos = np.zeros((self.partCount, 3))
         for i in range(self.partCount):
@@ -93,27 +86,64 @@ class gas_simulation_3d:
         self.vel = random.uniform(-1, 1, (self.partCount, 3)) * self.velNormalized
 
     def SetGraphs(self):
-        self.figure = plt.figure(figsize=(11, 8))
-        self.ax1 = plt.subplot2grid((3, 3), (0, 0), rowspan=2, colspan=2, projection='3d')
-        box_limits = np.array([0, self.sideLength])
-        self.ax1.set_xlim3d(box_limits)
-        self.ax1.set_ylim3d(box_limits)
-        self.ax1.set_zlim3d(box_limits)
-        self.ax1.set_xlabel('X')
-        self.ax1.set_ylabel('Y')
-        self.ax1.set_zlabel('Z')
-        self.ax2 = plt.subplot2grid((3, 3), (0, 2))
-        self.ax2.set_xlabel('Speed')
-        self.ax2.set_ylabel('Frequency')
+        """
+        Setting up graphs with initial histogram state included. Graphs are located in the same window.
+        Precise size of a window was chosen as a minimum size at which particles positions on the graph can be seen.
+        """
+
+        boxLimits = np.array([0, self.sideLength])
+
+        # creating graph windows
+        self.figure = plt.figure(figsize=(10.4, 5.85))
+
+        self.particleGraph = plt.subplot2grid((18, 32), (1, 1), rowspan=16, colspan=16, projection='3d')
+        self.particleGraph.set_xlim3d(boxLimits)
+        self.particleGraph.set_ylim3d(boxLimits)
+        self.particleGraph.set_zlim3d(boxLimits)
+        self.particleGraph.set_xlabel('X')
+        self.particleGraph.set_ylabel('Y')
+        self.particleGraph.set_zlabel('Z')
+
+        self.distributionGraph = plt.subplot2grid((18, 32), (6, 23), rowspan=5, colspan=9)
+        self.distributionGraph.set_xlabel('Speed')
+        self.distributionGraph.set_ylabel('Frequency')
+
         # setting up initial histogram state
         self.vel_hist_data = np.zeros(self.partCount)
         for i in range(self.partCount):
             self.vel_hist_data[i] = (self.vel[i, 0] ** 2 + self.vel[i, 1] ** 2 + self.vel[i, 2] ** 2) ** (1 / 2)
 
-    def step(self, dt):
+    def Step(self, dt):
+        """
+        This module computes changes in system which happens after set period of time dt (aka steps).
 
-        # updating positions of the particles
+        Collisions between particles are only calculated for particles inside cells, which where defined in previous
+        module.
+
+        To do that, each step we first check to which cell does each particle belong. To do that we simply do 3*n
+        checks, where n - number of particles. After that we check collisions of particles inside of a cell.
+        This method improves our calculations time because in a straightforward approach we make n^2 calculations
+        (it is n*(n-1) to be exact but for big n in which we are interested we can say it is n^2) of
+        distances between particles, and after that we make (n^2)/2 checks of collisions. In this modified approach
+        we only make 3*n calculations of belongings, after that we make (n/m)^2 calculations of distances between
+        particles, where m - number of cells. And lastly we make m * ((n/m)^2)/2 checks of collisions. Therefore we only
+        do 3*n+(n/m)^2 calculations, which is less than n^2 by a lot in our situation. m * ((n/m)^2)/2 = (n^2)/2m, which
+        is less than (n^2)/2.
+        """
+
+        # updating positions of the particles after dt period of time
         self.pos = self.pos + self.vel * dt
+
+        """
+        In this part we set up an array of cells and particles inside of them. Layout of an array is as follows:
+        [[x_1_edge, x_2_edge, y_1_edge, y_2_edge, z_1_edge, z_2_edge, particle_index_1, particle_index_2, ... ]
+         [x_1_edge, x_2_edge, y_1_edge, y_2_edge, z_1_edge, z_2_edge, particle_index_n, particle_index_n+1, ...]
+                                                    .........
+        ]
+        where edges are edges of cells, x_1, x_2 - closer and farther edges of a cell (closer = closer to origin point
+        (0, 0, 0)).
+        If there is no vacant slot for a new particle, new column is created, vacant slots are marked as 0. 
+        """
 
         # finding colliding particles, can be improved by creating a grid
         distances = squareform(pdist(self.pos))
@@ -196,7 +226,8 @@ def animate(a):
     return bars.patches + [molecules]
 
 def my_dist(v, mass, temp):
-    return ((2 / np.pi) ** (1/2)) * ((mass / (1.87e-23 * temp)) ** (3/2)) * (v ** 2) * np.exp(-mass * (v ** 2) / (2 * 1.87e-23 * temp))
+    return ((2 / np.pi) ** (1/2)) * ((mass / (1.87e-23 * temp)) ** (3/2)) * \
+           (v ** 2) * np.exp(-mass * (v ** 2) / (2 * 1.87e-23 * temp))
 
 
 abobus_3d = gas_simulation_3d()
