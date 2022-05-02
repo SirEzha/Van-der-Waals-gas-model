@@ -27,9 +27,6 @@ class GasSimulation3d:
         self.cubicParts1 = int(np.floor(self.partCount ** (1 / 3)))  # created for optimizing future calculations
         self.cubicParts2 = (self.cubicParts1 ** 2)  # created for optimizing future calculations
 
-        self.partBelonging = np.zeros(7, self.cubicParts1 ** 3) # this array is explained in Step
-        self.partBelonging[0, 0] = 
-
         """
         Calculating needed parameters from initial conditions.
         """
@@ -38,6 +35,14 @@ class GasSimulation3d:
         self.velNormalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1 / 2)  # root mean square of speed of molecules
         self.SetParticles()  # initializing particle initializing method
         self.SetGraphs()  # initializing graph initializing method
+
+        self.partBelonging = np.zeros(self.cubicParts1 ** 3, 7)  # this array is explained in 'Step'
+        # calcualting and storing cells borders
+        cellLength = self.sideLength / self.cubicParts1 # the length of a side of a cell
+        for i in range(self.cubicParts1 ** 3):
+            for j in range(3):
+                self.partBelonging[i, 2 * j] = cellLength * i
+                self.partBelonging[i, 2 * j + 1] = cellLength * (i + 1)
 
     def SetParticles(self):
         """
@@ -75,6 +80,7 @@ class GasSimulation3d:
             self.pos[i, :] = np.array([dists[int(temp % self.cubicParts1)] + random.rand(1)[0] * (self.radius * 0.5),
                                        dists[int((temp % self.cubicParts2) // self.cubicParts1)] + random.rand(1)[0] * (self.radius * 0.5),
                                        dists[int(temp // self.cubicParts2)] + random.rand(1)[0] * (self.radius * 0.5)])
+            self.partBelonging[temp, 6] = i
 
         """
         Creating random speed matrix where values are placed in as:
@@ -230,7 +236,7 @@ def my_dist(v, mass, temp):
            (v ** 2) * np.exp(-mass * (v ** 2) / (2 * 1.87e-23 * temp))
 
 
-abobus_3d = gas_simulation_3d()
+abobus_3d = GasSimulation3d()
 x = np.linspace(0, 5, 100)
 p = my_dist(x, abobus_3d.mass, 300)
 dt = 1. / 500000000
