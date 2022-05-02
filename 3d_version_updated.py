@@ -12,7 +12,7 @@ Initial speeds are determined by temperature, from which the speeds are calculat
 
 class GasSimulation3d:
 
-    def __init__(self, particlesCount=45, mass=5e-20, effectiveRadius=2e-10, volume=1e-23, T=300):
+    def __init__(self, particlesCount=2000, mass=5e-20, effectiveRadius=2e-10, volume=1e-23, T=300):
         """
         Initializing starting parameters
         """
@@ -33,10 +33,10 @@ class GasSimulation3d:
         self.b = self.partCount * ((4 / 3) * np.pi * (self.radius ** 3))  # idk what this is i forgot
         self.sideLength = (volume ** (1 / 3))  # length of the side of observed chamber
         self.velNormalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1 / 2)  # root mean square of speed of molecules
+        self.partBelonging = np.zeros((self.cubicParts1 ** 3, 7))  # this array is explained in 'Step'
         self.SetParticles()  # initializing particle initializing method
         self.SetGraphs()  # initializing graph initializing method
 
-        self.partBelonging = np.zeros(self.cubicParts1 ** 3, 7)  # this array is explained in 'Step'
         # calcualting and storing cells borders
         cellLength = self.sideLength / self.cubicParts1 # the length of a side of a cell
         for i in range(self.cubicParts1 ** 3):
@@ -221,7 +221,7 @@ def animate(a):
     ax2.clear()
     ax2.set_xlim(0, 1.5)
     ax2.set_ylim(0, 2)
-    abobus_3d.step(dt)
+    abobus_3d.Step(dt)
     molecules.set_data_3d(abobus_3d.pos[:, 0], abobus_3d.pos[:, 1], abobus_3d.pos[:, 2])
     molecules.set_markersize(1)
     for i in range(abobus_3d.partCount):
@@ -239,14 +239,14 @@ def my_dist(v, mass, temp):
 abobus_3d = GasSimulation3d()
 x = np.linspace(0, 5, 100)
 p = my_dist(x, abobus_3d.mass, 300)
-dt = 1. / 500000000
+dt = 1. / 800000000
 fig = abobus_3d.figure
-ax1 = abobus_3d.ax1
-ax2 = abobus_3d.ax2
+ax1 = abobus_3d.particleGraph
+ax2 = abobus_3d.distributionGraph
 ax2.plot(x, p)
 data = abobus_3d.vel_hist_data
 _, _, bars = ax2.hist([], bins = 100, lw=1, density=True, alpha=0.75)
 molecules, = ax1.plot([], [], [], 'p')
-ani = animation.FuncAnimation(fig, animate, frames=300, interval=40, blit=True, init_func=init)
+ani = animation.FuncAnimation(fig, animate, frames=300, interval=20, blit=True, init_func=init)
 #ani.save('particle_box_3d_test.mp4', fps=30, extra_args=['-vcodec', 'libx264'])
 plt.show()
