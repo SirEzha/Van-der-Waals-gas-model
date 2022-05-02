@@ -33,16 +33,10 @@ class GasSimulation3d:
         self.b = self.partCount * ((4 / 3) * np.pi * (self.radius ** 3))  # idk what this is i forgot
         self.sideLength = (volume ** (1 / 3))  # length of the side of observed chamber
         self.velNormalized = (3 * 1.87e-23 * self.temp / self.mass) ** (1 / 2)  # root mean square of speed of molecules
-        self.partBelonging = np.zeros((self.cubicParts1 ** 3, 7))  # this array is explained in 'Step'
+        self.cellBelonging = dict()  # this array is explained in 'Step'
         self.SetParticles()  # initializing particle initializing method
         self.SetGraphs()  # initializing graph initializing method
 
-        # calcualting and storing cells borders
-        cellLength = self.sideLength / self.cubicParts1 # the length of a side of a cell
-        for i in range(self.cubicParts1 ** 3):
-            for j in range(3):
-                self.partBelonging[i, 2 * j] = cellLength * i
-                self.partBelonging[i, 2 * j + 1] = cellLength * (i + 1)
 
     def SetParticles(self):
         """
@@ -80,7 +74,10 @@ class GasSimulation3d:
             self.pos[i, :] = np.array([dists[int(temp % self.cubicParts1)] + random.rand(1)[0] * (self.radius * 0.5),
                                        dists[int((temp % self.cubicParts2) // self.cubicParts1)] + random.rand(1)[0] * (self.radius * 0.5),
                                        dists[int(temp // self.cubicParts2)] + random.rand(1)[0] * (self.radius * 0.5)])
-            self.partBelonging[temp, 6] = i
+
+        #filling the dictionary with all the keys for all the cells
+        for i in range(self.cubicParts1):
+            self.cellBelonging[i] = list()
 
         """
         Creating random speed matrix where values are placed in as:
@@ -141,14 +138,10 @@ class GasSimulation3d:
         self.pos = self.pos + self.vel * dt
 
         """
-        In this part we set up an array of cells and particles inside of them. Layout of an array is as follows:
-        [[x_1_edge, x_2_edge, y_1_edge, y_2_edge, z_1_edge, z_2_edge, particle_index_1, particle_index_2, ... ]
-         [x_1_edge, x_2_edge, y_1_edge, y_2_edge, z_1_edge, z_2_edge, particle_index_n, particle_index_n+1, ...]
-                                                    .........
-        ]
-        where edges are edges of cells, x_1, x_2 - closer and farther edges of a cell (closer = closer to origin point
-        (0, 0, 0)).
-        If there is no vacant slot for a new particle, new column is created, vacant slots are marked as 0. 
+        NEW VERSION:
+        We create a dictionary with number of keys equal to the number of cells, where each key corresponds to one
+        cell. Then each step we determine in which cell does each particle belong to. After that we are left with lists
+        of particles inside each cell.
         """
 
         # finding colliding particles, can be improved by creating a grid
@@ -249,4 +242,13 @@ _, _, bars = ax2.hist([], bins = 100, lw=1, density=True, alpha=0.75)
 molecules, = ax1.plot([], [], [], 'p')
 ani = animation.FuncAnimation(fig, animate, frames=300, interval=20, blit=True, init_func=init)
 #ani.save('particle_box_3d_test.mp4', fps=30, extra_args=['-vcodec', 'libx264'])
+print(abobus_3d.cellBelonging)
 plt.show()
+
+
+
+"""
+We have to determine how do we number the cells. Suppose we have m cells. Then the cells are numbered from x to y to z
+axes. Then the first cell would be the top-most left-most closest cell. The second cell would be to the right to the
+first etc. In short we number them as described in SetParticles function.
+"""
