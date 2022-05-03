@@ -26,6 +26,7 @@ class GasSimulation3d:
         self.particleCell = {}
         self.cubicParts1 = int(np.floor(self.partCount ** (1 / 3)))  # created for optimizing future calculations
         self.cubicParts2 = (self.cubicParts1 ** 2)  # created for optimizing future calculations
+        self.cellLength = self.sideLength / self.cubicParts1 # the length of a side of a single cell
 
         """
         Calculating needed parameters from initial conditions.
@@ -137,6 +138,16 @@ class GasSimulation3d:
         # updating positions of the particles after dt period of time
         self.pos = self.pos + self.vel * dt
 
+
+        # calculating the positions of the particles inside of the cells
+        for i in range(self.partCount):
+            xCell = self.pos(i, 0) / self.cellLength
+            yCell = self.pos(i, 1) / self.cellLength
+            zCell = self.pos(i, 2) / self.cellLength
+            numCell = xCell + yCell * self.cubicParts1 + zCell * self.cubicParts2
+            self.cellBelonging[]
+
+
         """
         NEW VERSION:
         We create a dictionary with number of keys equal to the number of cells, where each key corresponds to one
@@ -189,16 +200,6 @@ class GasSimulation3d:
                 self.vel[i, [2]] = -self.vel[i, [2]]
                 self.pos[i, [2]] = self.sideLength - (self.radius * 1.01)
 
-        # finding the pressure
-        # self.pressure = self.dp / (self.counter * dt * (self.side_length ** 2))
-        # print(self.pressure)
-        # self.left_hand_side = self.pressure * (self.side_length ** 3 - self.b)
-        # print(self.left_hand_side)
-        # print(self.counter)
-        # if self.counter > 3e3:
-        #     self.dp = 0
-        #     self.side_length *= 1.2
-        #     self.counter = 0
 
 
 
